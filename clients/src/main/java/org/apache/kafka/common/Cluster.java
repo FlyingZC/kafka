@@ -182,7 +182,7 @@ public final class Cluster {
         return this.nodesById.get(id);
     }
 
-    /**
+    /** 获取给定的 topic-partition 的 leader
      * Get the current leader for the given topic-partition
      * @param topicPartition The topic and partition we want to know the leader for
      * @return The node that is the leader for this topic-partition, or null if there is currently no leader
@@ -214,7 +214,7 @@ public final class Cluster {
         return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
     }
 
-    /**
+    /** 根据 topic 获取 分区 数量
      * Get the number of partitions for the given topic
      * @param topic The topic to get the number of partitions for
      * @return The number of partitions or null if there is no corresponding metadata
@@ -224,7 +224,7 @@ public final class Cluster {
         return partitions == null ? null : partitions.size();
     }
 
-    /**
+    /** 获取 topic 可用的 partitions
      * Get the list of available partitions for this topic
      * @param topic The topic name
      * @return A list of partitions

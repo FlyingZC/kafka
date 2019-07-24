@@ -242,7 +242,7 @@ public class Sender implements Runnable {
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
 
-        // get the list of partitions with data ready to send
+        // get the list of partitions with data ready to send.获取准备发送数据的分区列表.
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update

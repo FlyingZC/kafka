@@ -764,37 +764,37 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
-        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record); // 拦截器
         return doSend(interceptedRecord, callback);
     }
 
-    /**
+    /** 异步发消息到 topic
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
-            // first make sure the metadata for the topic is available
+            // first make sure the metadata for the topic is available. 1.确保 metadata 可用,即在数据发送前确保该 topic 可用.
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
-            try {
-                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+            try { // 2.序列化 key
+                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key()); // 序列化器, Serializer
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer", cce);
             }
             byte[] serializedValue;
-            try {
+            try { // 3.序列化 value
                 serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer", cce);
             }
-            int partition = partition(record, serializedKey, serializedValue, cluster);
+            int partition = partition(record, serializedKey, serializedValue, cluster); // 4.返回分区号
             tp = new TopicPartition(record.topic(), partition);
 
             setReadOnly(record.headers());
@@ -810,10 +810,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
-
+            // 5.消息累加器 中 追加数据
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs);
-            if (result.batchIsFull || result.newBatchCreated) {
+            if (result.batchIsFull || result.newBatchCreated) { // 6.若 batch 满了,唤醒 sender 线程发送数据
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }
@@ -912,7 +912,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
-    /**
+    /** 校验 record 的 size 不超过 maxRequestSize 或 totalMemorySize
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
@@ -1096,7 +1096,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return clusterResourceListeners;
     }
 
-    /**
+    /** 根据 record 计算 分区
      * computes partition for given record.
      * if the record has partition returns the value otherwise
      * calls configured partitioner class to compute the partition.
@@ -1104,9 +1104,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
         Integer partition = record.partition();
         return partition != null ?
-                partition :
+                partition : // 1.指定了 partition,则直接返回指定的.
                 partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);// 2.未指定的情况
     }
 
     private void throwIfNoTransactionManager() {

@@ -78,7 +78,7 @@ public final class RecordAccumulator {
     private final BufferPool free;
     private final Time time;
     private final ApiVersions apiVersions;
-    private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
+    private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches; //  partion -> 消息Deque 映射
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
@@ -192,20 +192,20 @@ public final class RecordAccumulator {
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             // check if we have an in-progress batch
-            Deque<ProducerBatch> dq = getOrCreateDeque(tp);
+            Deque<ProducerBatch> dq = getOrCreateDeque(tp); // 一个 TopicPartition 对应一个 Deque
             synchronized (dq) {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
-                if (appendResult != null)
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq); // 追加数据
+                if (appendResult != null) // deque 中 有数据
                     return appendResult;
             }
-
+            // 为 topic-partition 创建一个新的 RecordBatch
             // we don't have an in-progress record batch try to allocate a new batch
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
-            buffer = free.allocate(size, maxTimeToBlock);
+            buffer = free.allocate(size, maxTimeToBlock); // 分配缓冲区
             synchronized (dq) {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed)
@@ -216,13 +216,13 @@ public final class RecordAccumulator {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
-
+                // 创建 RecordBatch
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds())); // 向新的 RecordBatch 中追加数据
 
-                dq.addLast(batch);
-                incomplete.add(batch);
+                dq.addLast(batch); // 将 RecordBatch 添加到对应的 deque 中
+                incomplete.add(batch); // 向未 ack 的 batch 集合中 添加该 batch
 
                 // Don't deallocate this buffer in the finally block as it's being used in the record batch
                 buffer = null;
@@ -244,7 +244,7 @@ public final class RecordAccumulator {
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
-    /**
+    /** 消息追加到 ProducerBatch 中
      *  Try to append to a ProducerBatch.
      *
      *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
@@ -590,15 +590,15 @@ public final class RecordAccumulator {
         return batches.get(tp);
     }
 
-    /**
+    /** 根据给定的 topic-partion 返回对应的 deque,若没有则创建
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        Deque<ProducerBatch> d = this.batches.get(tp);
+        Deque<ProducerBatch> d = this.batches.get(tp); // 一个分区 对应 一个双端队列
         if (d != null)
             return d;
         d = new ArrayDeque<>();
-        Deque<ProducerBatch> previous = this.batches.putIfAbsent(tp, d);
+        Deque<ProducerBatch> previous = this.batches.putIfAbsent(tp, d); // 没有则创建 deque
         if (previous == null)
             return d;
         else

@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Time;
 
 
-/**
+/** 实现 ByteBuffer 的 复用
  * A pool of ByteBuffers kept under a given memory limit. This class is fairly specific to the needs of the producer. In
  * particular it has the following properties:
  * <ol>
