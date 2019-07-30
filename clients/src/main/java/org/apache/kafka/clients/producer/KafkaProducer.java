@@ -768,7 +768,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return doSend(interceptedRecord, callback);
     }
 
-    /** 异步发消息到 topic
+    /** 异步发消息到 topic.实际是将消息放入 RecordAccumulator 暂存,等待发送
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
@@ -963,7 +963,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
-    public void flush() {
+    public void flush() { // 刷新操作,等待 RecordAccumulator 中所有消息发送完成,在刷新完成之前会阻塞调用的线程
         log.trace("Flushing accumulated records in producer.");
         this.accumulator.beginFlush();
         this.sender.wakeup();
@@ -974,7 +974,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    /**
+    /** 从 Metadata 中获取指定 Topic 中的分区信息
      * Get the partition metadata for the given topic. This can be used for custom partitioning.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws InterruptException If the thread is interrupted while blocked
@@ -1009,7 +1009,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
-    public void close() {
+    public void close() { // 关闭此 Producer 对象,主要操作是设置 close 标志,等待 RecordAccumulator 中的消息清空,关闭 Sender 线程
         close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
