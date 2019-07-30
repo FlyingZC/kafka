@@ -41,9 +41,9 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
 
   override def send(topic: String, key: Array[Byte], value: Array[Byte]) {
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic, key, value)
-    if(sync) { // 同步
+    if(sync) { // ͬ��
       this.producer.send(record).get()
-    } else { // 异步
+    } else { // �첽
       this.producer.send(record,
         new ErrorLoggingCallback(topic, key, value, false))
     }

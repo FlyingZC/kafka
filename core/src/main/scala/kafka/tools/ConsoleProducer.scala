@@ -59,7 +59,7 @@ object ConsoleProducer {
         do {
           message = reader.readMessage()
           if (message != null)
-            producer.send(message.topic, message.key, message.value) // å‘æ¶ˆæ¯
+            producer.send(message.topic, message.key, message.value) // ·¢ÏûÏ¢
         } while (message != null)
     } catch {
       case e: joptsimple.OptionException =>

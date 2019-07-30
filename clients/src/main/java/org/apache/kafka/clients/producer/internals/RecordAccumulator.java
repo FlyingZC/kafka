@@ -421,7 +421,7 @@ public final class RecordAccumulator {
      * </ol>
      */
     public ReadyCheckResult ready(Cluster cluster, long nowMs) {
-        Set<Node> readyNodes = new HashSet<>();
+        Set<Node> readyNodes = new HashSet<>(); // 可发送的 node 集合
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
 
@@ -437,7 +437,7 @@ public final class RecordAccumulator {
                     // Note that entries are currently not removed from batches when deque is empty.
                     unknownLeaderTopics.add(part.topic());
                 } else if (!readyNodes.contains(leader) && !muted.contains(part)) {
-                    ProducerBatch batch = deque.peekFirst();
+                    ProducerBatch batch = deque.peekFirst(); // 从当前 topic-partition 的 Deque 中 取出第一条 ProductBatch
                     if (batch != null) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
@@ -445,7 +445,7 @@ public final class RecordAccumulator {
                         boolean full = deque.size() > 1 || batch.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
-                        if (sendable && !backingOff) {
+                        if (sendable && !backingOff) { // 可发送
                             readyNodes.add(leader);
                         } else {
                             long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
@@ -494,7 +494,7 @@ public final class RecordAccumulator {
             return Collections.emptyMap();
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
-        for (Node node : nodes) {
+        for (Node node : nodes) { // 遍历 readyNodes
             int size = 0;
             List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
             List<ProducerBatch> ready = new ArrayList<>();

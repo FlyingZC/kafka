@@ -135,8 +135,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val txnLogAppendRetryQueue = new LinkedBlockingQueue[TxnLogAppend]()
 
-  override val unsentExpiryMs: Int = config.requestTimeoutMs
-
   newGauge(
     "UnknownDestinationQueueSize",
     new Gauge[Int] {

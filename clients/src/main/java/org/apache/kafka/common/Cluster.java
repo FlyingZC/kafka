@@ -188,11 +188,11 @@ public final class Cluster {
      * @return The node that is the leader for this topic-partition, or null if there is currently no leader
      */
     public Node leaderFor(TopicPartition topicPartition) {
-        PartitionInfo info = partitionsByTopicPartition.get(topicPartition);
+        PartitionInfo info = partitionsByTopicPartition.get(topicPartition); // 获取 topic-partition 对应的 分区信息
         if (info == null)
             return null;
         else
-            return info.leader();
+            return info.leader();// 分区的 leader
     }
 
     /**
@@ -234,7 +234,7 @@ public final class Cluster {
         return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
     }
 
-    /**
+    /** 获取以该节点为首的分区的列表
      * Get the list of partitions whose leader is this node
      * @param nodeId The node id
      * @return A list of partitions

@@ -569,9 +569,8 @@ private[log] class Cleaner(val id: Int,
         throttler.maybeThrottle(outputBuffer.limit())
       }
 
-      // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
-      // `result.bytesRead` contains bytes from the `messagesRead` and any discarded batches.
-      if (readBuffer.limit() > 0 && result.bytesRead == 0)
+      // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
+      if (readBuffer.limit() > 0 && result.messagesRead == 0)
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
@@ -890,30 +889,24 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
   def onControlBatchRead(controlBatch: RecordBatch): Boolean = {
     consumeAbortedTxnsUpTo(controlBatch.lastOffset)
 
-    val controlRecordIterator = controlBatch.iterator
-    if (controlRecordIterator.hasNext) {
-      val controlRecord = controlRecordIterator.next()
-      val controlType = ControlRecordType.parse(controlRecord.key)
-      val producerId = controlBatch.producerId
-      controlType match {
-        case ControlRecordType.ABORT =>
-          ongoingAbortedTxns.remove(producerId) match {
-            // Retain the marker until all batches from the transaction have been removed
-            case Some(abortedTxnMetadata) if abortedTxnMetadata.lastObservedBatchOffset.isDefined =>
-              transactionIndex.foreach(_.append(abortedTxnMetadata.abortedTxn))
-              false
-            case _ => true
-          }
+    val controlRecord = controlBatch.iterator.next()
+    val controlType = ControlRecordType.parse(controlRecord.key)
+    val producerId = controlBatch.producerId
+    controlType match {
+      case ControlRecordType.ABORT =>
+        ongoingAbortedTxns.remove(producerId) match {
+          // Retain the marker until all batches from the transaction have been removed
+          case Some(abortedTxnMetadata) if abortedTxnMetadata.lastObservedBatchOffset.isDefined =>
+            transactionIndex.foreach(_.append(abortedTxnMetadata.abortedTxn))
+            false
+          case _ => true
+        }
 
-        case ControlRecordType.COMMIT =>
-          // This marker is eligible for deletion if we didn't traverse any batches from the transaction
-          !ongoingCommittedTxns.remove(producerId)
+      case ControlRecordType.COMMIT =>
+        // This marker is eligible for deletion if we didn't traverse any batches from the transaction
+        !ongoingCommittedTxns.remove(producerId)
 
-        case _ => false
-      }
-    } else {
-      // An empty control batch was already cleaned, so it's safe to discard
-      true
+      case _ => false
     }
   }
 

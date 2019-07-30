@@ -77,6 +77,7 @@ class DelayedFetch(delayMs: Long,
    */
   override def tryComplete() : Boolean = {
     var accumulatedSize = 0
+    var accumulatedThrottledSize = 0
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
@@ -109,7 +110,9 @@ class DelayedFetch(delayMs: Long,
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
-                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                if (quota.isThrottled(topicPartition))
+                  accumulatedThrottledSize += bytesAvailable
+                else
                   accumulatedSize += bytesAvailable
               }
             }
@@ -128,8 +131,9 @@ class DelayedFetch(delayMs: Long,
     }
 
     // Case D
-    if (accumulatedSize >= fetchMetadata.fetchMinBytes)
-       forceComplete()
+    if (accumulatedSize >= fetchMetadata.fetchMinBytes
+      || ((accumulatedSize + accumulatedThrottledSize) >= fetchMetadata.fetchMinBytes && !quota.isQuotaExceeded()))
+      forceComplete()
     else
       false
   }

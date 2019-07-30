@@ -155,13 +155,9 @@ object DumpLogSegments {
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
       ProducerStateManager.readSnapshot(file).foreach { entry =>
-        print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
-          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} ")
-        entry.batchMetadata.headOption.foreach { metadata =>
-          print(s"firstSequence: ${metadata.firstSeq} lastSequence: ${metadata.lastSeq} " +
-            s"lastOffset: ${metadata.lastOffset} offsetDelta: ${metadata.offsetDelta} timestamp: ${metadata.timestamp}")
-        }
-        println()
+        println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
+          s"cachedMetadata: ${entry.batchMetadata}")
       }
     } catch {
       case e: CorruptSnapshotException =>
@@ -341,7 +337,7 @@ object DumpLogSegments {
       val keyString = Json.encode(Map("metadata" -> groupId))
       val valueString = Json.encode(Map(
           "protocolType" -> protocolType,
-          "protocol" -> group.protocolOrNull,
+          "protocol" -> group.protocol,
           "generationId" -> group.generationId,
           "assignment" -> assignment))
 
@@ -422,8 +418,7 @@ object DumpLogSegments {
           print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset +
             " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
             " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
-            " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional +
-            " isControl: " + batch.isControlBatch)
+            " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional)
         else
           print("offset: " + batch.lastOffset)
 

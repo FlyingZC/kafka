@@ -213,7 +213,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
 
-        quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+        quotaManagers = QuotaFactory.instantiate(config, metrics, time)
         notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
@@ -225,11 +225,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         metadataCache = new MetadataCache(config.brokerId)
         credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
 
-        // Create and start the socket server acceptor threads so that the bound port is known.
-        // Delay starting processors until the end of the initialization sequence to ensure
-        // that credentials have been loaded before processing authentications.
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
-        socketServer.startup(startupProcessors = false)
+        socketServer.startup()
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -292,7 +289,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
         checkpointBrokerId(config.brokerId)
 
-        socketServer.startProcessors()
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
@@ -521,10 +517,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (kafkaHealthcheck != null)
           CoreUtils.swallow(kafkaHealthcheck.shutdown())
 
-        // Stop socket server to stop accepting any more connections and requests.
-        // Socket server will be shutdown towards the end of the sequence.
         if (socketServer != null)
-          CoreUtils.swallow(socketServer.stopProcessingRequests())
+          CoreUtils.swallow(socketServer.shutdown())
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
 
@@ -551,13 +545,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (zkUtils != null)
           CoreUtils.swallow(zkUtils.close())
 
-        if (quotaManagers != null)
-          CoreUtils.swallow(quotaManagers.shutdown())
-        // Even though socket server is stopped much earlier, controller can generate
-        // response for controlled shutdown request. Shutdown server at the end to
-        // avoid any failures (e.g. when metrics are recorded)
-        if (socketServer != null)
-          CoreUtils.swallow(socketServer.shutdown())
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
         if (brokerTopicStats != null)

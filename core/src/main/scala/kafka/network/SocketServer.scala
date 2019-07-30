@@ -72,21 +72,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
-  private var stoppedProcessingRequests = false
 
   /**
-   * Start the socket server. Acceptors for all the listeners are started. Processors
-   * are started if `startupProcessors` is true. If not, processors are only started when
-   * [[kafka.network.SocketServer#startProcessors()]] is invoked. Delayed starting of processors
-   * is used to delay processing client connections until server is fully initialized, e.g.
-   * to ensure that all credentials have been loaded before authentications are performed.
-   * Acceptors are always started during `startup` so that the bound port is known when this
-   * method completes even when ephemeral ports are used. Incoming connections on this server
-   * are processed when processors start up and invoke [[org.apache.kafka.common.network.Selector#poll]].
-   *
-   * @param startupProcessors Flag indicating whether `Processor`s must be started.
+   * Start the socket server
    */
-  def startup(startupProcessors: Boolean = true) {
+  def startup() {
     this.synchronized {
 
       connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
@@ -111,9 +101,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         acceptor.awaitStartup()
 
         processorBeginIndex = processorEndIndex
-      }
-      if (startupProcessors) {
-        startProcessors()
       }
     }
 
@@ -143,39 +130,15 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   // register the processor threads for notification of responses
   requestChannel.addResponseListener(id => processors(id).wakeup())
-  /**
-   * Starts processors of all the acceptors of this server if they have not already been started.
-   * This method is used for delayed starting of processors if [[kafka.network.SocketServer#startup]]
-   * was invoked with `startupProcessors=false`.
-   */
-  def startProcessors(): Unit = synchronized {
-    acceptors.values.foreach { _.startProcessors() }
-    info(s"Started processors for ${acceptors.size} acceptors")
-  }
 
   /**
-    * Stop processing requests and new connections.
-    */
-  def stopProcessingRequests() = {
-    info("Stopping socket server request processors")
+   * Shutdown the socket server
+   */
+  def shutdown() = {
+    info("Shutting down")
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
       processors.foreach(_.shutdown)
-      requestChannel.clear()
-      stoppedProcessingRequests = true
-    }
-    info("Stopped socket server request processors")
-  }
-
-  /**
-    * Shutdown the socket server. If still processing requests, shutdown
-    * acceptors and processors first.
-    */
-  def shutdown() = {
-    info("Shutting down socket server")
-    this.synchronized {
-      if (!stoppedProcessingRequests)
-        stopProcessingRequests()
       requestChannel.shutdown()
     }
     info("Shutdown completed")
@@ -291,14 +254,11 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
-  private val processorsStarted = new AtomicBoolean
 
-  private[network] def startProcessors(): Unit = synchronized {
-    if (!processorsStarted.getAndSet(true)) {
-      processors.foreach { processor =>
-        KafkaThread.nonDaemon(s"kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
-          processor).start()
-      }
+  this.synchronized {
+    processors.foreach { processor =>
+      KafkaThread.nonDaemon(s"kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
+        processor).start()
     }
   }
 
